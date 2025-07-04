@@ -1,25 +1,10 @@
-# ──────────────────────────────────────────────
-# Dockerfile  (Pattern A: Liberty dropins deploy)
-# ──────────────────────────────────────────────
-#
-# 1. Build stage  : Maven 3.8 + JDK 17
-#    ── compile WAR  +  pull Db2 JDBC (jcc-*.jar)
-# 2. Runtime stage: Open Liberty kernel-slim
-#    ── copy Db2 driver into shared lib
-#    ── copy server configuration (server.xml など)
-#    ── dropins/ に WAR を置いて自動デプロイ
-#
-# ❶ 画像名やバージョンは 2025-07 時点の最新を例示
-# ❷ Db2 ドライバは Maven Central にある jcc-<ver>.jar のみ利用
-# ❸ server.xml 内に <webApplication …> は不要
-# ──────────────────────────────────────────────
-
 # ---------- build stage ----------
 FROM maven:3.8-openjdk-17 AS builder
 WORKDIR /app
 COPY pom.xml .
 RUN mvn -q dependency:go-offline
 COPY src ./src
+RUN mvn -q package -DskipTests
 
 # Db2 JDBC ドライバーを取得（1 行で OK）
 RUN mvn -q dependency:copy \
