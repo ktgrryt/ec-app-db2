@@ -135,14 +135,19 @@ public class ProductResource {
             @QueryParam("brandName")    String brandName) throws SQLException {
 
         String sql =
-            "SELECT COUNT(*) AS total " +
+            "SELECT p.id, p.name, p.description, " +
+            "       c.name AS category_name, " +
+            "       b.name AS brand_name " +
             "FROM   products p " +
-            "LEFT  JOIN categories c ON p.category_id = c.id " +
-            "LEFT  JOIN brands     b ON p.brand_id    = b.id " +
+            "LEFT   JOIN categories c ON p.category_id = c.id " +
+            "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
             "WHERE  (CAST(? AS VARCHAR(256)) = '' OR p.name        LIKE '%' || ? || '%') " +
             "  AND  (CAST(? AS VARCHAR(256)) = '' OR p.description LIKE '%' || ? || '%') " +
             "  AND  (CAST(? AS VARCHAR(128)) = '' OR c.name        LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(128)) = '' OR b.name        LIKE '%' || ? || '%')";
+            "  AND  (CAST(? AS VARCHAR(128)) = '' OR b.name        LIKE '%' || ? || '%') " +
+            "OFFSET ? ROWS " +
+            "FETCH FIRST ? ROWS ONLY";
+
 
 
         try (Connection conn = ds.getConnection();
