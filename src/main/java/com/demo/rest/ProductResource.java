@@ -75,19 +75,20 @@ public class ProductResource {
         final int pageSize = 100;
         final int offset   = (page - 1) * pageSize;
 
-    String sql =
-        "SELECT p.id, p.name, p.description, " +
-        "       c.name AS category_name, " +
-        "       b.name AS brand_name " +
-        "FROM   products p " +
-        "LEFT   JOIN categories c ON p.category_id = c.id " +
-        "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
-        "WHERE  (CAST(? AS VARCHAR(100)) = '' OR p.name        LIKE ?) " +
-        "  AND  (CAST(? AS VARCHAR(100)) = '' OR p.description LIKE ?) " +
-        "  AND  (CAST(? AS VARCHAR(100)) = '' OR c.name        LIKE ?) " +
-        "  AND  (CAST(? AS VARCHAR(100)) = '' OR b.name        LIKE ?) " +
-        "OFFSET ? ROWS " +
-        "FETCH FIRST ? ROWS ONLY";
+        String sql =
+            "SELECT p.id, p.name, p.description, " +
+            "       c.name AS category_name, " +
+            "       b.name AS brand_name, " +
+            "       (SELECT AVG(id) FROM products WHERE MOD(id, 100) < 50) AS random_metric " +
+            "FROM   products         p " +
+            "LEFT  JOIN categories c ON p.category_id = c.id " +
+            "LEFT  JOIN brands     b ON p.brand_id    = b.id " +
+            "WHERE  (? = '' OR p.name        LIKE ?) " +
+            "  AND  (? = '' OR p.description LIKE ?) " +
+            "  AND  (? = '' OR c.name        LIKE ?) " +
+            "  AND  (? = '' OR b.name        LIKE ?) " +
+            "ORDER  BY p.id * (SELECT COUNT(*)/1000 + 1 FROM products) " +
+            "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
 
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -134,14 +135,19 @@ public class ProductResource {
             @QueryParam("brandName")    String brandName) throws SQLException {
 
         String sql =
-            "SELECT COUNT(*) AS total " +
-            "FROM   products         p " +
-            "LEFT  JOIN categories c ON p.category_id = c.id " +
-            "LEFT  JOIN brands     b ON p.brand_id    = b.id " +
+            "SELECT p.id, p.name, p.description, " +
+            "       c.name AS category_name, " +
+            "       b.name AS brand_name " + 
+            "FROM   products       p " + 
+            "LEFT   JOIN categories c ON p.category_id = c.id " +
+            "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
             "WHERE  (? = '' OR p.name        LIKE ?) " +
             "  AND  (? = '' OR p.description LIKE ?) " +
             "  AND  (? = '' OR c.name        LIKE ?) " +
-            "  AND  (? = '' OR b.name        LIKE ?)";
+            "  AND  (? = '' OR b.name        LIKE ?) " +
+            "OFFSET ? ROWS " +               
+            "FETCH FIRST ? ROWS ONLY";       
+
 
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
