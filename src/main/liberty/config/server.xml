@@ -10,29 +10,23 @@
     </featureManager>
 
     <!-- 1. Db2 JDBC ドライバー -->
-    <library id="Db2Lib">
-        <!-- db2jcc4.jar とライセンス jar を配置 -->
-        <fileset dir="${shared.resource.dir}/db2"
-                 includes="db2jcc*.jar db2jcc_license_*.jar"/>
-    </library>
+<library id="Db2Lib">
+    <fileset dir="${shared.resource.dir}/db2" includes="jcc-*.jar"/>
+</library>
 
     <!-- 2. XADataSource クラス -->
-    <jdbcDriver id="Db2Driver"
-                libraryRef="Db2Lib"
-                javax.sql.XADataSource="com.ibm.db2.jcc.DB2XADataSource"/>
+    <jdbcDriver id="Db2Driver" libraryRef="Db2Lib"
+            xaDataSourceClassName="com.ibm.db2.jcc.DB2XADataSource"
+            datasourceClassName="com.ibm.db2.jcc.DB2ConnectionPoolDataSource"/>
 
     <!-- 3. DataSource 定義 -->
-    <dataSource id="Db2DS"
-                jndiName="jdbc/Db2DS"
-                jdbcDriverRef="Db2Driver"
-                type="javax.sql.XADataSource">
-        <properties.db2.jcc
-            serverName="db2"
-            portNumber="50000"
-            databaseName="MYDB"
-            user="db2inst1"
-            password="db2test"
-            driverType="4"/>
+    <dataSource id="Db2DS" jndiName="jdbc/Db2DS"
+            jdbcDriverRef="Db2Driver" type="javax.sql.XADataSource">
+        <properties.xa serverName="${env.DB2_HOST}"
+                    portNumber="${env.DB2_PORT}"
+                    databaseName="${env.DB2_DB}"
+                    user="${env.DB2_USER}"
+                    password="${env.DB2_PASSWORD}"/>
     </dataSource>
 
     <!-- 認証まわり（サンプル） -->
