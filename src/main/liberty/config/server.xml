@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<server description="EC server (Db2 edition)">
+
+    <!-- Liberty 機能 -->
+    <featureManager>
+        <feature>restfulWS-3.1</feature>
+        <feature>jdbc-4.3</feature>
+        <feature>cdi-4.0</feature>
+        <feature>jsonb-3.0</feature>
+    </featureManager>
+
+    <!-- 1. Db2 JDBC ドライバー -->
+    <library id="Db2Lib">
+        <!-- db2jcc4.jar とライセンス jar を配置 -->
+        <fileset dir="${shared.resource.dir}/db2"
+                 includes="db2jcc*.jar db2jcc_license_*.jar"/>
+    </library>
+
+    <!-- 2. XADataSource クラス -->
+    <jdbcDriver id="Db2Driver"
+                libraryRef="Db2Lib"
+                javax.sql.XADataSource="com.ibm.db2.jcc.DB2XADataSource"/>
+
+    <!-- 3. DataSource 定義 -->
+    <dataSource id="Db2DS"
+                jndiName="jdbc/Db2DS"
+                jdbcDriverRef="Db2Driver"
+                type="javax.sql.XADataSource">
+        <properties.db2.jcc
+            serverName="db2"
+            portNumber="50000"
+            databaseName="MYDB"
+            user="db2inst1"
+            password="db2test"
+            driverType="4"/>
+    </dataSource>
+
+    <!-- 認証まわり（サンプル） -->
+    <basicRegistry id="basic" realm="BasicRealm">
+        <!-- <user name="yourUserName" password="encodedPwd" /> -->
+    </basicRegistry>
+
+    <!-- HTTP/HTTPS ポート -->
+    <httpEndpoint id="defaultHttpEndpoint"
+                  httpPort="9080"
+                  httpsPort="9443" />
+
+    <!-- WAR 自動展開 -->
+    <applicationManager autoExpand="true"/>
+
+    <!-- アプリ配置 -->
+    <webApplication contextRoot="/ec-app" location="ec-app.war"/>
+
+    <!-- デフォルト SSL -->
+    <ssl id="defaultSSLConfig" trustDefaultCerts="true"/>
+</server>
