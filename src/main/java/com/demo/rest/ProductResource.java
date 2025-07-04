@@ -78,17 +78,18 @@ public class ProductResource {
         String sql =
             "SELECT p.id, p.name, p.description, " +
             "       c.name AS category_name, " +
-            "       b.name AS brand_name, " +
-            "FROM   products       p " +
+            "       b.name AS brand_name " + 
+            "FROM   products p " +
             "LEFT   JOIN categories c ON p.category_id = c.id " +
             "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
             "WHERE  (? = '' OR p.name        LIKE ?) " +
             "  AND  (? = '' OR p.description LIKE ?) " +
             "  AND  (? = '' OR c.name        LIKE ?) " +
             "  AND  (? = '' OR b.name        LIKE ?) " +
-            "ORDER BY p.id * (SELECT COUNT(*)/1000 + 1 FROM products) " +
+            "ORDER  BY p.id * (SELECT COUNT(*)/1000 + 1 FROM products) " +
             "OFFSET ? ROWS " +
             "FETCH FIRST ? ROWS ONLY";
+
 
 
         try (Connection conn = ds.getConnection();
