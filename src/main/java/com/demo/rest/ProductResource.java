@@ -78,16 +78,16 @@ public class ProductResource {
     String sql =
         "SELECT p.id, p.name, p.description, " +
         "       c.name AS category_name, " +
-        "       b.name AS brand_name " + 
-        "FROM   products       p " + 
+        "       b.name AS brand_name " +
+        "FROM   products p " +
         "LEFT   JOIN categories c ON p.category_id = c.id " +
         "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
-        "WHERE  (? = '' OR p.name        LIKE ?) " +
-        "  AND  (? = '' OR p.description LIKE ?) " +
-        "  AND  (? = '' OR c.name        LIKE ?) " +
-        "  AND  (? = '' OR b.name        LIKE ?) " +
-        "OFFSET ? ROWS " +               
-        "FETCH FIRST ? ROWS ONLY";       
+        "WHERE  (CAST(? AS VARCHAR(100)) = '' OR p.name        LIKE ?) " +
+        "  AND  (CAST(? AS VARCHAR(100)) = '' OR p.description LIKE ?) " +
+        "  AND  (CAST(? AS VARCHAR(100)) = '' OR c.name        LIKE ?) " +
+        "  AND  (CAST(? AS VARCHAR(100)) = '' OR b.name        LIKE ?) " +
+        "OFFSET ? ROWS " +
+        "FETCH FIRST ? ROWS ONLY";
 
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
