@@ -79,16 +79,17 @@ public class ProductResource {
             "SELECT p.id, p.name, p.description, " +
             "       c.name AS category_name, " +
             "       b.name AS brand_name, " +
-            "       (SELECT AVG(id) FROM products WHERE MOD(id, 100) < 50) AS random_metric " +
-            "FROM   products         p " +
-            "LEFT  JOIN categories c ON p.category_id = c.id " +
-            "LEFT  JOIN brands     b ON p.brand_id    = b.id " +
+            "FROM   products       p " +
+            "LEFT   JOIN categories c ON p.category_id = c.id " +
+            "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
             "WHERE  (? = '' OR p.name        LIKE ?) " +
             "  AND  (? = '' OR p.description LIKE ?) " +
             "  AND  (? = '' OR c.name        LIKE ?) " +
             "  AND  (? = '' OR b.name        LIKE ?) " +
-            "ORDER  BY p.id * (SELECT COUNT(*)/1000 + 1 FROM products) " +
-            "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+            "ORDER BY p.id * (SELECT COUNT(*)/1000 + 1 FROM products) " +
+            "OFFSET ? ROWS " +
+            "FETCH FIRST ? ROWS ONLY";
+
 
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
