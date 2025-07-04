@@ -10,9 +10,9 @@
     </featureManager>
 
     <!-- 1. Db2 JDBC ドライバー -->
-<library id="Db2Lib">
-    <fileset dir="${shared.resource.dir}/db2" includes="jcc-*.jar"/>
-</library>
+    <library id="Db2Lib">
+        <fileset dir="${shared.resource.dir}/db2" includes="jcc-*.jar"/>
+    </library>
 
     <!-- 2. XADataSource クラス -->
     <jdbcDriver id="Db2Driver" libraryRef="Db2Lib"
@@ -20,13 +20,15 @@
             datasourceClassName="com.ibm.db2.jcc.DB2ConnectionPoolDataSource"/>
 
     <!-- 3. DataSource 定義 -->
-    <dataSource id="Db2DS" jndiName="jdbc/Db2DS"
-            jdbcDriverRef="Db2Driver" type="javax.sql.XADataSource">
-        <properties.xa serverName="${env.DB2_HOST}"
-                    portNumber="${env.DB2_PORT}"
-                    databaseName="${env.DB2_DB}"
-                    user="${env.DB2_USER}"
-                    password="${env.DB2_PASSWORD}"/>
+    <dataSource jndiName="jdbc/Db2DS">
+        <jdbcDriver libraryRef="Db2Lib"/>
+        <properties.db2.jcc
+            driverType="4"
+            serverName="db2"
+            portNumber="50000"
+            databaseName="sample"
+            user="db2inst1"
+            password="passw0rd"/>
     </dataSource>
 
     <!-- 認証まわり（サンプル） -->
