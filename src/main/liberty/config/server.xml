@@ -24,7 +24,7 @@
         <jdbcDriver libraryRef="Db2Lib"/>
         <properties.db2.jcc
             driverType="4"
-            serverName="db2"
+            serverName="c-db2ucluster-sample-db2u"
             portNumber="50000"
             databaseName="mydb"
             user="db2inst1"
