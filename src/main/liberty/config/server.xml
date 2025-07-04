@@ -26,9 +26,9 @@
             driverType="4"
             serverName="db2"
             portNumber="50000"
-            databaseName="sample"
+            databaseName="mydb"
             user="db2inst1"
-            password="passw0rd"/>
+            password="db2test"/>
     </dataSource>
 
     <!-- 認証まわり（サンプル） -->
