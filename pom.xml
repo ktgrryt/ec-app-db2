@@ -42,12 +42,6 @@
             <version>11.5.8.0</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>com.ibm.db2</groupId>
-            <artifactId>db2jcc_license_cu</artifactId>
-            <version>11.5.8.0</version>
-            <scope>provided</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -83,11 +77,6 @@
                             <dependency>
                                 <groupId>com.ibm.db2</groupId>
                                 <artifactId>jcc</artifactId>
-                                <version>11.5.8.0</version>
-                            </dependency>
-                            <dependency>
-                                <groupId>com.ibm.db2</groupId>
-                                <artifactId>db2jcc_license_cu</artifactId>
                                 <version>11.5.8.0</version>
                             </dependency>
                         </dependencyGroup>
