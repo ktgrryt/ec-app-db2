@@ -49,7 +49,7 @@
     <applicationManager autoExpand="true"/>
 
     <!-- アプリ配置 -->
-    <webApplication contextRoot="/ec-app" location="ec-app.war"/>
+    <!-- <webApplication contextRoot="/ec-app" location="ec-app.war"/> -->
 
     <!-- デフォルト SSL -->
     <ssl id="defaultSSLConfig" trustDefaultCerts="true"/>
