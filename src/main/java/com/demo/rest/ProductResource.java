@@ -75,15 +75,20 @@ public class ProductResource {
         final int pageSize = 100;
         final int offset   = (page - 1) * pageSize;
 
-        String sql =
-            "SELECT COUNT(*) AS total " +
-            "FROM   products p " +
-            "LEFT  JOIN categories c ON p.category_id = c.id " +
-            "LEFT  JOIN brands     b ON p.brand_id    = b.id " +
-            "WHERE  (CAST(? AS VARCHAR(256)) = '' OR p.name        LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(256)) = '' OR p.description LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(128)) = '' OR c.name        LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(128)) = '' OR b.name        LIKE '%' || ? || '%')";
+        final String SEARCH_SQL =
+                "SELECT  p.id, p.name, p.description, " +
+                "        c.name AS category_name, " +
+                "        b.name AS brand_name " +
+                "FROM    products p " +
+                "LEFT JOIN categories c ON c.id = p.category_id " +
+                "LEFT JOIN brands     b ON b.id = p.brand_id " +
+                "WHERE   (? IS NULL OR ? = '' OR UPPER(p.name) LIKE '%' || UPPER(?) || '%' " +
+                "                       OR UPPER(p.description) LIKE '%' || UPPER(?) || '%') " +
+                "  AND   (? IS NULL OR ? = '' OR UPPER(c.name) LIKE '%' || UPPER(?) || '%') " +
+                "  AND   (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%') " +
+                "ORDER  BY p.id " +                       // 必要に応じて並べ替えキーを変更
+                "OFFSET  ? ROWS " +
+                "FETCH  NEXT ? ROWS ONLY";
 
 
         try (Connection conn = ds.getConnection();
@@ -130,21 +135,15 @@ public class ProductResource {
             @QueryParam("categoryName") String categoryName,
             @QueryParam("brandName")    String brandName) throws SQLException {
 
-        String sql =
-            "SELECT p.id, p.name, p.description, " +
-            "       c.name AS category_name, " +
-            "       b.name AS brand_name " +
-            "FROM   products p " +
-            "LEFT   JOIN categories c ON p.category_id = c.id " +
-            "LEFT   JOIN brands     b ON p.brand_id    = b.id " +
-            "WHERE  (CAST(? AS VARCHAR(256)) = '' OR p.name        LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(256)) = '' OR p.description LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(128)) = '' OR c.name        LIKE '%' || ? || '%') " +
-            "  AND  (CAST(? AS VARCHAR(128)) = '' OR b.name        LIKE '%' || ? || '%') " +
-            "OFFSET ? ROWS " +
-            "FETCH FIRST ? ROWS ONLY";
-
-
+        final String COUNT_SQL =
+                "SELECT COUNT(*) AS total " +
+                "FROM   products p " +
+                "LEFT JOIN categories c ON c.id = p.category_id " +
+                "LEFT JOIN brands     b ON b.id = p.brand_id " +
+                "WHERE  (? IS NULL OR ? = '' OR UPPER(p.name) LIKE '%' || UPPER(?) || '%' " +
+                "                       OR UPPER(p.description) LIKE '%' || UPPER(?) || '%') " +
+                "  AND  (? IS NULL OR ? = '' OR UPPER(c.name) LIKE '%' || UPPER(?) || '%') " +
+                "  AND  (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%')";
 
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
