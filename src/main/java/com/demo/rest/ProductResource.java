@@ -14,17 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Product REST API (Liberty + Db2 11.5)
+ * Product REST API (Liberty + Db2)
  *
- * - Full‑text search (Db2 Text Search)
- * - Key‑set (seek) paging
- *
- *  - afterId   : 前ページの最終 ID（初回は 0）
- *  - pageSize  : 1 ページあたり件数（既定 40）
- *
- *  検索結果は ID 昇順で返す。フロント側は
- *    nextAfterId = list.isEmpty() ? null : list.get(list.size() - 1).getId();
- *  を次ページの afterId に設定する。
+ * 動的に SQL を組み立て、渡すバインド変数は必要な分だけ
+ * LIKE 用パターンは Java 側で生成 ("%WORD%")
  */
 @Path("/api")
 public class ProductResource {
@@ -34,38 +27,59 @@ public class ProductResource {
     private DataSource ds;
 
     /* --------------------------------------------------
-       /search  : 商品検索（全文検索 + key‑set）
+       /products  : 全商品取得
+       -------------------------------------------------- */
+    @GET
+    @Path("/products")
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<Product> getProducts() throws SQLException {
+        String sql =
+                "SELECT p.id, p.name, p.description, p.category_id, p.brand_id, " +
+                "       c.name AS category_name, b.name AS brand_name " +
+                "FROM   products p " +
+                "LEFT  JOIN categories c ON p.category_id = c.id " +
+                "LEFT  JOIN brands     b ON p.brand_id    = b.id";
+
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return mapProducts(rs);
+        }
+    }
+
+    /* --------------------------------------------------
+       /search  : 商品検索（ページング）
        -------------------------------------------------- */
     @GET
     @Path("/search")
     @Produces(MediaType.APPLICATION_JSON)
     public List<Product> searchProducts(
-            @QueryParam("keyword")      String keyword,
+            @QueryParam("productName")  String productName,
             @QueryParam("categoryName") String categoryName,
             @QueryParam("brandName")    String brandName,
-            @QueryParam("afterId")      @DefaultValue("0") long afterId,
-            @QueryParam("pageSize")     @DefaultValue("40") int pageSize) throws SQLException {
+            @QueryParam("page") @DefaultValue("1") int page) throws SQLException {
 
+        final int pageSize = 100;
+        final int offset   = Math.max(page - 1, 0) * pageSize;
+
+        // --- SQL を動的生成 --------------------------------------------------
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT p.id, p.name, p.description, ")
            .append("       c.name AS category_name, ")
            .append("       b.name AS brand_name ")
            .append("FROM   products p ")
-           .append("JOIN   categories c ON c.id = p.category_id ")
-           .append("JOIN   brands     b ON b.id = p.brand_id ")
-           .append("WHERE  p.id > ?");     // key‑set cursor
+           .append("LEFT JOIN categories c ON c.id = p.category_id ")
+           .append("LEFT JOIN brands     b ON b.id = p.brand_id ")
+           .append("WHERE 1=1");
 
         List<Object> params = new ArrayList<>();
-        params.add(afterId);
 
-        // --- full‑text search ------------------------------------------------
-        if (!isNullOrEmpty(keyword)) {
-            sql.append(" AND (CONTAINS(p.name, ?) = 1 OR CONTAINS(p.description, ?) = 1)");
-            params.add(keyword);
-            params.add(keyword);
+        if (!isNullOrEmpty(productName)) {
+            String pattern = toLikePattern(productName);
+            sql.append(" AND (UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?)");
+            params.add(pattern);
+            params.add(pattern);
         }
-
-        // --- その他のフィルタ ------------------------------------------------
         if (!isNullOrEmpty(categoryName)) {
             sql.append(" AND UPPER(c.name) LIKE ?");
             params.add(toLikePattern(categoryName));
@@ -75,7 +89,8 @@ public class ProductResource {
             params.add(toLikePattern(brandName));
         }
 
-        sql.append(" ORDER BY p.id FETCH FIRST ? ROWS ONLY");
+        sql.append(" ORDER BY p.id OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
+        params.add(offset);
         params.add(pageSize);
 
         try (Connection conn = ds.getConnection();
@@ -87,29 +102,29 @@ public class ProductResource {
 
     /* --------------------------------------------------
        /search/count : ヒット件数
-       ※ offset 廃止後も件数が欲しい場合のみ使用
        -------------------------------------------------- */
     @GET
     @Path("/search/count")
     @Produces(MediaType.APPLICATION_JSON)
     public int searchProductsCount(
-            @QueryParam("keyword")      String keyword,
+            @QueryParam("productName")  String productName,
             @QueryParam("categoryName") String categoryName,
             @QueryParam("brandName")    String brandName) throws SQLException {
 
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT COUNT(*) AS total ")
            .append("FROM   products p ")
-           .append("JOIN   categories c ON c.id = p.category_id ")
-           .append("JOIN   brands     b ON b.id = p.brand_id ")
+           .append("LEFT JOIN categories c ON c.id = p.category_id ")
+           .append("LEFT JOIN brands     b ON b.id = p.brand_id ")
            .append("WHERE 1=1");
 
         List<Object> params = new ArrayList<>();
 
-        if (!isNullOrEmpty(keyword)) {
-            sql.append(" AND (CONTAINS(p.name, ?) = 1 OR CONTAINS(p.description, ?) = 1)");
-            params.add(keyword);
-            params.add(keyword);
+        if (!isNullOrEmpty(productName)) {
+            String pattern = toLikePattern(productName);
+            sql.append(" AND (UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?)");
+            params.add(pattern);
+            params.add(pattern);
         }
         if (!isNullOrEmpty(categoryName)) {
             sql.append(" AND UPPER(c.name) LIKE ?");
@@ -128,28 +143,7 @@ public class ProductResource {
     }
 
     /* --------------------------------------------------
-       検索条件無しの一覧取得 (変更なし)
-       -------------------------------------------------- */
-    @GET
-    @Path("/products")
-    @Produces(MediaType.APPLICATION_JSON)
-    public List<Product> getProducts() throws SQLException {
-        String sql =
-            "SELECT p.id, p.name, p.description, "+
-            "       c.name AS category_name, b.name AS brand_name "+
-            "FROM   products p "+
-            "JOIN   categories c ON c.id = p.category_id "+
-            "JOIN   brands     b ON b.id = p.brand_id";
-
-        try (Connection conn = ds.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            return mapProducts(rs);
-        }
-    }
-
-    /* --------------------------------------------------
-       /categories, /brands も変更なし
+       /categories : カテゴリ一覧
        -------------------------------------------------- */
     @GET
     @Path("/categories")
@@ -170,6 +164,9 @@ public class ProductResource {
         }
     }
 
+    /* --------------------------------------------------
+       /brands : ブランド一覧
+       -------------------------------------------------- */
     @GET
     @Path("/brands")
     @Produces(MediaType.APPLICATION_JSON)
@@ -197,7 +194,7 @@ public class ProductResource {
     }
 
     private static String toLikePattern(String keyword) {
-        return "%" + keyword.toUpperCase() + "%";
+        return "%" + keyword.toUpperCase() + "%";  // 呼び出し側で null/empty チェック済み
     }
 
     /** PreparedStatement にリストの値を順番にバインド */
