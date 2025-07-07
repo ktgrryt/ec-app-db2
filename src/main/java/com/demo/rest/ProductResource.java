@@ -13,6 +13,13 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Product REST API (Liberty + Db2)
+ *
+ * ✅ 動的に SQL を組み立て、渡すバインド変数は必要な分だけ
+ * ✅ LIKE 用パターンは Java 側で生成 ("%WORD%")
+ * ✅ 無指定の検索条件は WHERE 句に含めないので -302 回避
+ */
 @Path("/api")
 public class ProductResource {
 
@@ -27,8 +34,6 @@ public class ProductResource {
     @Path("/products")
     @Produces(MediaType.APPLICATION_JSON)
     public List<Product> getProducts() throws SQLException {
-        List<Product> products = new ArrayList<>();
-
         String sql =
                 "SELECT p.id, p.name, p.description, p.category_id, p.brand_id, " +
                 "       c.name AS category_name, b.name AS brand_name " +
@@ -37,22 +42,10 @@ public class ProductResource {
                 "LEFT  JOIN brands     b ON p.brand_id    = b.id";
 
         try (Connection conn = ds.getConnection();
-             Statement st   = conn.createStatement();
-             ResultSet rs   = st.executeQuery(sql)) {
-
-            while (rs.next()) {
-                Product p = new Product();
-                p.setId(rs.getLong("id"));
-                p.setName(rs.getString("name"));
-                p.setDescription(rs.getString("description"));
-                p.setCategoryId(rs.getLong("category_id"));
-                p.setBrandId(rs.getLong("brand_id"));
-                p.setCategoryName(rs.getString("category_name"));
-                p.setBrandName(rs.getString("brand_name"));
-                products.add(p);
-            }
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return mapProducts(rs);
         }
-        return products;
     }
 
     /* --------------------------------------------------
@@ -67,55 +60,45 @@ public class ProductResource {
             @QueryParam("brandName")    String brandName,
             @QueryParam("page") @DefaultValue("1") int page) throws SQLException {
 
-        List<Product> products = new ArrayList<>();
         final int pageSize = 100;
         final int offset   = Math.max(page - 1, 0) * pageSize;
 
-        // Java 側でワイルドカードを付けたパターンを生成
-        String namePattern     = toLikePattern(productName);
-        String categoryPattern = toLikePattern(categoryName);
-        String brandPattern    = toLikePattern(brandName);
+        // --- SQL を動的生成 --------------------------------------------------
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT p.id, p.name, p.description, ")
+           .append("       c.name AS category_name, ")
+           .append("       b.name AS brand_name ")
+           .append("FROM   products p ")
+           .append("LEFT JOIN categories c ON c.id = p.category_id ")
+           .append("LEFT JOIN brands     b ON b.id = p.brand_id ")
+           .append("WHERE 1=1");
 
-        final String SEARCH_SQL =
-                "SELECT p.id, p.name, p.description, " +
-                "       c.name AS category_name, " +
-                "       b.name AS brand_name " +
-                "FROM   products p " +
-                "LEFT JOIN categories c ON c.id = p.category_id " +
-                "LEFT JOIN brands     b ON b.id = p.brand_id " +
-                "WHERE (COALESCE(?, '') = '' OR UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?) " +
-                "  AND (COALESCE(?, '') = '' OR UPPER(c.name) LIKE ?) " +
-                "  AND (COALESCE(?, '') = '' OR UPPER(b.name) LIKE ?) " +
-                "ORDER BY p.id " +
-                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        List<Object> params = new ArrayList<>();
+
+        if (!isNullOrEmpty(productName)) {
+            String pattern = toLikePattern(productName);
+            sql.append(" AND (UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?)");
+            params.add(pattern);
+            params.add(pattern);
+        }
+        if (!isNullOrEmpty(categoryName)) {
+            sql.append(" AND UPPER(c.name) LIKE ?");
+            params.add(toLikePattern(categoryName));
+        }
+        if (!isNullOrEmpty(brandName)) {
+            sql.append(" AND UPPER(b.name) LIKE ?");
+            params.add(toLikePattern(brandName));
+        }
+
+        sql.append(" ORDER BY p.id OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
+        params.add(offset);
+        params.add(pageSize);
 
         try (Connection conn = ds.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SEARCH_SQL)) {
-
-            int idx = 1;
-            ps.setString(idx++, productName);
-            ps.setString(idx++, namePattern);
-            ps.setString(idx++, namePattern);
-            ps.setString(idx++, categoryName);
-            ps.setString(idx++, categoryPattern);
-            ps.setString(idx++, brandName);
-            ps.setString(idx++, brandPattern);
-            ps.setInt(idx++, offset);
-            ps.setInt(idx,   pageSize);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    Product p = new Product();
-                    p.setId(rs.getLong("id"));
-                    p.setName(rs.getString("name"));
-                    p.setDescription(rs.getString("description"));
-                    p.setCategoryName(rs.getString("category_name"));
-                    p.setBrandName(rs.getString("brand_name"));
-                    products.add(p);
-                }
-            }
+             PreparedStatement ps = prepare(conn, sql.toString(), params);
+             ResultSet rs = ps.executeQuery()) {
+            return mapProducts(rs);
         }
-        return products;
     }
 
     /* --------------------------------------------------
@@ -129,34 +112,34 @@ public class ProductResource {
             @QueryParam("categoryName") String categoryName,
             @QueryParam("brandName")    String brandName) throws SQLException {
 
-        String namePattern     = toLikePattern(productName);
-        String categoryPattern = toLikePattern(categoryName);
-        String brandPattern    = toLikePattern(brandName);
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT COUNT(*) AS total ")
+           .append("FROM   products p ")
+           .append("LEFT JOIN categories c ON c.id = p.category_id ")
+           .append("LEFT JOIN brands     b ON b.id = p.brand_id ")
+           .append("WHERE 1=1");
 
-        final String COUNT_SQL =
-                "SELECT COUNT(*) AS total " +
-                "FROM   products p " +
-                "LEFT JOIN categories c ON c.id = p.category_id " +
-                "LEFT JOIN brands     b ON b.id = p.brand_id " +
-                "WHERE (COALESCE(?, '') = '' OR UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?) " +
-                "  AND (COALESCE(?, '') = '' OR UPPER(c.name) LIKE ?) " +
-                "  AND (COALESCE(?, '') = '' OR UPPER(b.name) LIKE ?)";
+        List<Object> params = new ArrayList<>();
+
+        if (!isNullOrEmpty(productName)) {
+            String pattern = toLikePattern(productName);
+            sql.append(" AND (UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?)");
+            params.add(pattern);
+            params.add(pattern);
+        }
+        if (!isNullOrEmpty(categoryName)) {
+            sql.append(" AND UPPER(c.name) LIKE ?");
+            params.add(toLikePattern(categoryName));
+        }
+        if (!isNullOrEmpty(brandName)) {
+            sql.append(" AND UPPER(b.name) LIKE ?");
+            params.add(toLikePattern(brandName));
+        }
 
         try (Connection conn = ds.getConnection();
-             PreparedStatement ps = conn.prepareStatement(COUNT_SQL)) {
-
-            int idx = 1;
-            ps.setString(idx++, productName);
-            ps.setString(idx++, namePattern);
-            ps.setString(idx++, namePattern);
-            ps.setString(idx++, categoryName);
-            ps.setString(idx++, categoryPattern);
-            ps.setString(idx++, brandName);
-            ps.setString(idx,   brandPattern);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt("total") : 0;
-            }
+             PreparedStatement ps = prepare(conn, sql.toString(), params);
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getInt("total") : 0;
         }
     }
 
@@ -167,20 +150,19 @@ public class ProductResource {
     @Path("/categories")
     @Produces(MediaType.APPLICATION_JSON)
     public List<Category> getCategories() throws SQLException {
-        List<Category> categories = new ArrayList<>();
-
+        String sql = "SELECT id, name FROM categories ORDER BY id";
         try (Connection conn = ds.getConnection();
-             Statement st   = conn.createStatement();
-             ResultSet rs   = st.executeQuery("SELECT id, name FROM categories")) {
-
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<Category> list = new ArrayList<>();
             while (rs.next()) {
                 Category c = new Category();
                 c.setId(rs.getLong("id"));
                 c.setName(rs.getString("name"));
-                categories.add(c);
+                list.add(c);
             }
+            return list;
         }
-        return categories;
     }
 
     /* --------------------------------------------------
@@ -190,30 +172,62 @@ public class ProductResource {
     @Path("/brands")
     @Produces(MediaType.APPLICATION_JSON)
     public List<Brand> getBrands() throws SQLException {
-        List<Brand> brands = new ArrayList<>();
-
+        String sql = "SELECT id, name FROM brands ORDER BY id";
         try (Connection conn = ds.getConnection();
-             Statement st   = conn.createStatement();
-             ResultSet rs   = st.executeQuery("SELECT id, name FROM brands")) {
-
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<Brand> list = new ArrayList<>();
             while (rs.next()) {
                 Brand b = new Brand();
                 b.setId(rs.getLong("id"));
                 b.setName(rs.getString("name"));
-                brands.add(b);
+                list.add(b);
             }
+            return list;
         }
-        return brands;
     }
 
     /* --------------------------------------------------
-       ヘルパーメソッド
+       共通ユーティリティ
        -------------------------------------------------- */
-    /**
-     * 検索キーワードが空か null の場合は null を返し、
-     * それ以外は "%WORD%" の形で大文字にして返す。
-     */
+    private static boolean isNullOrEmpty(String s) {
+        return s == null || s.isEmpty();
+    }
+
     private static String toLikePattern(String keyword) {
-        return (keyword == null || keyword.isEmpty()) ? null : "%" + keyword.toUpperCase() + "%";
+        return "%" + keyword.toUpperCase() + "%";  // 呼び出し側で null/empty チェック済み
+    }
+
+    /** PreparedStatement にリストの値を順番にバインド */
+    private static PreparedStatement prepare(Connection conn, String sql, List<Object> params) throws SQLException {
+        PreparedStatement ps = conn.prepareStatement(sql);
+        for (int i = 0; i < params.size(); i++) {
+            Object val = params.get(i);
+            if (val instanceof String) {
+                ps.setString(i + 1, (String) val);
+            } else if (val instanceof Integer) {
+                ps.setInt(i + 1, (int) val);
+            } else if (val instanceof Long) {
+                ps.setLong(i + 1, (long) val);
+            } else {
+                ps.setObject(i + 1, val);
+            }
+        }
+        return ps;
+    }
+
+    /** ResultSet → List<Product> */
+    private static List<Product> mapProducts(ResultSet rs) throws SQLException {
+        List<Product> list = new ArrayList<>();
+        while (rs.next()) {
+            Product p = new Product();
+            p.setId(rs.getLong("id"));
+            p.setName(rs.getString("name"));
+            p.setDescription(rs.getString("description"));
+            p.setCategoryName(rs.getString("category_name"));
+            p.setBrandName(rs.getString("brand_name"));
+            list.add(p);
+        }
+        return list;
     }
 }
