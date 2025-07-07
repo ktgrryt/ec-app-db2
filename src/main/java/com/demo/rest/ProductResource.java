@@ -9,11 +9,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,9 +20,9 @@ public class ProductResource {
     @Resource(lookup = "jdbc/Db2DS")
     private DataSource ds;
 
-    /* ------------------------------
+    /* --------------------------------------------------
        /products  : 全商品取得
-       ------------------------------ */
+       -------------------------------------------------- */
     @GET
     @Path("/products")
     @Produces(MediaType.APPLICATION_JSON)
@@ -34,11 +30,11 @@ public class ProductResource {
         List<Product> products = new ArrayList<>();
 
         String sql =
-            "SELECT p.id, p.name, p.description, p.category_id, p.brand_id, " +
-            "       c.name AS category_name, b.name AS brand_name " +
-            "FROM   products p " +
-            "LEFT  JOIN categories c ON p.category_id = c.id " +
-            "LEFT  JOIN brands     b ON p.brand_id    = b.id";
+                "SELECT p.id, p.name, p.description, p.category_id, p.brand_id, " +
+                "       c.name AS category_name, b.name AS brand_name " +
+                "FROM   products p " +
+                "LEFT  JOIN categories c ON p.category_id = c.id " +
+                "LEFT  JOIN brands     b ON p.brand_id    = b.id";
 
         try (Connection conn = ds.getConnection();
              Statement st   = conn.createStatement();
@@ -59,9 +55,9 @@ public class ProductResource {
         return products;
     }
 
-    /* ------------------------------
+    /* --------------------------------------------------
        /search  : 商品検索（ページング）
-       ------------------------------ */
+       -------------------------------------------------- */
     @GET
     @Path("/search")
     @Produces(MediaType.APPLICATION_JSON)
@@ -73,7 +69,12 @@ public class ProductResource {
 
         List<Product> products = new ArrayList<>();
         final int pageSize = 100;
-        final int offset   = (page - 1) * pageSize;
+        final int offset   = Math.max(page - 1, 0) * pageSize;
+
+        // Java 側でワイルドカードを付けたパターンを生成
+        String namePattern     = toLikePattern(productName);
+        String categoryPattern = toLikePattern(categoryName);
+        String brandPattern    = toLikePattern(brandName);
 
         final String SEARCH_SQL =
                 "SELECT p.id, p.name, p.description, " +
@@ -82,21 +83,25 @@ public class ProductResource {
                 "FROM   products p " +
                 "LEFT JOIN categories c ON c.id = p.category_id " +
                 "LEFT JOIN brands     b ON b.id = p.brand_id " +
-                "WHERE  (? IS NULL OR ? = '' OR UPPER(p.name) LIKE '%' || UPPER(?) || '%' " +
-                "                       OR UPPER(p.description) LIKE '%' || UPPER(?) || '%') " +
-                "  AND  (? IS NULL OR ? = '' OR UPPER(c.name) LIKE '%' || UPPER(?) || '%') " +
-                "  AND  (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%') " +
+                "WHERE (COALESCE(?, '') = '' OR UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?) " +
+                "  AND (COALESCE(?, '') = '' OR UPPER(c.name) LIKE ?) " +
+                "  AND (COALESCE(?, '') = '' OR UPPER(b.name) LIKE ?) " +
                 "ORDER BY p.id " +
                 "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
 
-            try (Connection conn = ds.getConnection();
-                PreparedStatement ps = conn.prepareStatement(SEARCH_SQL)) {
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SEARCH_SQL)) {
 
-                for (int i = 1; i <= 4;  i++) ps.setString(i,  productName);
-                for (int i = 5; i <= 7;  i++) ps.setString(i,  categoryName);
-                for (int i = 8; i <= 10; i++) ps.setString(i,  brandName);
-                ps.setInt(11, offset);
-                ps.setInt(12, pageSize);
+            int idx = 1;
+            ps.setString(idx++, productName);
+            ps.setString(idx++, namePattern);
+            ps.setString(idx++, namePattern);
+            ps.setString(idx++, categoryName);
+            ps.setString(idx++, categoryPattern);
+            ps.setString(idx++, brandName);
+            ps.setString(idx++, brandPattern);
+            ps.setInt(idx++, offset);
+            ps.setInt(idx,   pageSize);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -113,9 +118,9 @@ public class ProductResource {
         return products;
     }
 
-    /* ------------------------------
+    /* --------------------------------------------------
        /search/count : ヒット件数
-       ------------------------------ */
+       -------------------------------------------------- */
     @GET
     @Path("/search/count")
     @Produces(MediaType.APPLICATION_JSON)
@@ -124,32 +129,40 @@ public class ProductResource {
             @QueryParam("categoryName") String categoryName,
             @QueryParam("brandName")    String brandName) throws SQLException {
 
+        String namePattern     = toLikePattern(productName);
+        String categoryPattern = toLikePattern(categoryName);
+        String brandPattern    = toLikePattern(brandName);
+
         final String COUNT_SQL =
                 "SELECT COUNT(*) AS total " +
                 "FROM   products p " +
                 "LEFT JOIN categories c ON c.id = p.category_id " +
                 "LEFT JOIN brands     b ON b.id = p.brand_id " +
-                "WHERE  (? IS NULL OR ? = '' OR UPPER(p.name) LIKE '%' || UPPER(?) || '%' " +
-                "                       OR UPPER(p.description) LIKE '%' || UPPER(?) || '%') " +
-                "  AND  (? IS NULL OR ? = '' OR UPPER(c.name) LIKE '%' || UPPER(?) || '%') " +
-                "  AND  (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%')";
+                "WHERE (COALESCE(?, '') = '' OR UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?) " +
+                "  AND (COALESCE(?, '') = '' OR UPPER(c.name) LIKE ?) " +
+                "  AND (COALESCE(?, '') = '' OR UPPER(b.name) LIKE ?)";
 
         try (Connection conn = ds.getConnection();
-            PreparedStatement ps = conn.prepareStatement(COUNT_SQL)) {
+             PreparedStatement ps = conn.prepareStatement(COUNT_SQL)) {
 
-            for (int i = 1; i <= 4;  i++) ps.setString(i, productName);
-            for (int i = 5; i <= 7;  i++) ps.setString(i, categoryName);
-            for (int i = 8; i <= 10; i++) ps.setString(i, brandName);
+            int idx = 1;
+            ps.setString(idx++, productName);
+            ps.setString(idx++, namePattern);
+            ps.setString(idx++, namePattern);
+            ps.setString(idx++, categoryName);
+            ps.setString(idx++, categoryPattern);
+            ps.setString(idx++, brandName);
+            ps.setString(idx,   brandPattern);
 
-                    try (ResultSet rs = ps.executeQuery()) {
-                        return (rs.next()) ? rs.getInt("total") : 0;
-                    }
-                }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt("total") : 0;
             }
+        }
+    }
 
-    /* ------------------------------
+    /* --------------------------------------------------
        /categories : カテゴリ一覧
-       ------------------------------ */
+       -------------------------------------------------- */
     @GET
     @Path("/categories")
     @Produces(MediaType.APPLICATION_JSON)
@@ -170,9 +183,9 @@ public class ProductResource {
         return categories;
     }
 
-    /* ------------------------------
+    /* --------------------------------------------------
        /brands : ブランド一覧
-       ------------------------------ */
+       -------------------------------------------------- */
     @GET
     @Path("/brands")
     @Produces(MediaType.APPLICATION_JSON)
@@ -191,5 +204,16 @@ public class ProductResource {
             }
         }
         return brands;
+    }
+
+    /* --------------------------------------------------
+       ヘルパーメソッド
+       -------------------------------------------------- */
+    /**
+     * 検索キーワードが空か null の場合は null を返し、
+     * それ以外は "%WORD%" の形で大文字にして返す。
+     */
+    private static String toLikePattern(String keyword) {
+        return (keyword == null || keyword.isEmpty()) ? null : "%" + keyword.toUpperCase() + "%";
     }
 }
