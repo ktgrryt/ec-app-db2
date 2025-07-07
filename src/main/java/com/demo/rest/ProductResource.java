@@ -76,38 +76,27 @@ public class ProductResource {
         final int offset   = (page - 1) * pageSize;
 
         final String SEARCH_SQL =
-                "SELECT  p.id, p.name, p.description, " +
-                "        c.name AS category_name, " +
-                "        b.name AS brand_name " +
-                "FROM    products p " +
+                "SELECT p.id, p.name, p.description, " +
+                "       c.name AS category_name, " +
+                "       b.name AS brand_name " +
+                "FROM   products p " +
                 "LEFT JOIN categories c ON c.id = p.category_id " +
                 "LEFT JOIN brands     b ON b.id = p.brand_id " +
-                "WHERE   (? IS NULL OR ? = '' OR UPPER(p.name) LIKE '%' || UPPER(?) || '%' " +
+                "WHERE  (? IS NULL OR ? = '' OR UPPER(p.name) LIKE '%' || UPPER(?) || '%' " +
                 "                       OR UPPER(p.description) LIKE '%' || UPPER(?) || '%') " +
-                "  AND   (? IS NULL OR ? = '' OR UPPER(c.name) LIKE '%' || UPPER(?) || '%') " +
-                "  AND   (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%') " +
-                "ORDER  BY p.id " +                       // 必要に応じて並べ替えキーを変更
-                "OFFSET  ? ROWS " +
-                "FETCH  NEXT ? ROWS ONLY";
+                "  AND  (? IS NULL OR ? = '' OR UPPER(c.name) LIKE '%' || UPPER(?) || '%') " +
+                "  AND  (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%') " +
+                "ORDER BY p.id " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
 
+            try (Connection conn = ds.getConnection();
+                PreparedStatement ps = conn.prepareStatement(SEARCH_SQL)) {
 
-        try (Connection conn = ds.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            String pnameLike = "%" + (productName  == null ? "" : productName)  + "%";
-            String cnameLike = "%" + (categoryName == null ? "" : categoryName) + "%";
-            String bnameLike = "%" + (brandName    == null ? "" : brandName)    + "%";
-
-            ps.setString(1, productName  == null ? "" : productName);
-            ps.setString(2, pnameLike);
-            ps.setString(3, productName  == null ? "" : productName);   // description 用
-            ps.setString(4, pnameLike);
-            ps.setString(5, categoryName == null ? "" : categoryName);
-            ps.setString(6, cnameLike);
-            ps.setString(7, brandName    == null ? "" : brandName);
-            ps.setString(8, bnameLike);
-            ps.setInt(9,  offset);
-            ps.setInt(10, pageSize);
+                for (int i = 1; i <= 4;  i++) ps.setString(i,  productName);
+                for (int i = 5; i <= 7;  i++) ps.setString(i,  categoryName);
+                for (int i = 8; i <= 10; i++) ps.setString(i,  brandName);
+                ps.setInt(11, offset);
+                ps.setInt(12, pageSize);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -146,26 +135,17 @@ public class ProductResource {
                 "  AND  (? IS NULL OR ? = '' OR UPPER(b.name) LIKE '%' || UPPER(?) || '%')";
 
         try (Connection conn = ds.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+            PreparedStatement ps = conn.prepareStatement(COUNT_SQL)) {
 
-            String pnameLike = "%" + (productName  == null ? "" : productName)  + "%";
-            String cnameLike = "%" + (categoryName == null ? "" : categoryName) + "%";
-            String bnameLike = "%" + (brandName    == null ? "" : brandName)    + "%";
+            for (int i = 1; i <= 4;  i++) ps.setString(i, productName);
+            for (int i = 5; i <= 7;  i++) ps.setString(i, categoryName);
+            for (int i = 8; i <= 10; i++) ps.setString(i, brandName);
 
-            ps.setString(1, productName  == null ? "" : productName);
-            ps.setString(2, pnameLike);
-            ps.setString(3, productName  == null ? "" : productName);   // description 用
-            ps.setString(4, pnameLike);
-            ps.setString(5, categoryName == null ? "" : categoryName);
-            ps.setString(6, cnameLike);
-            ps.setString(7, brandName    == null ? "" : brandName);
-            ps.setString(8, bnameLike);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                return (rs.next()) ? rs.getInt("total") : 0;
+                    try (ResultSet rs = ps.executeQuery()) {
+                        return (rs.next()) ? rs.getInt("total") : 0;
+                    }
+                }
             }
-        }
-    }
 
     /* ------------------------------
        /categories : カテゴリ一覧
