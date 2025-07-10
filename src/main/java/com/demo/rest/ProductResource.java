@@ -125,7 +125,10 @@ public class ProductResource {
 
         if (!isNullOrEmpty(productName)) {
             String pattern = toLikePattern(productName);
-            sql.append(" AND (UPPER(p.name) LIKE ? OR UPPER(p.description) LIKE ?)");
+            sql.append(" AND (")
+            .append("  UPPER(p.name) LIKE ?")
+            .append("  OR UPPER(CAST(p.description AS VARCHAR(32672))) LIKE ?")
+            .append(")");
             params.add(pattern);
             params.add(pattern);
         }
