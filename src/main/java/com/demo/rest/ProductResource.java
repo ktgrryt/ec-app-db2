@@ -75,13 +75,8 @@ public class ProductResource {
         List<Object> params = new ArrayList<>();
 
         if (!isNullOrEmpty(productName)) {
-            String pattern = toLikePattern(productName);
-            sql.append(" AND (")
-            .append("  UPPER(p.name) LIKE ?")
-            .append("  OR UPPER(CAST(p.description AS VARCHAR(32672))) LIKE ?")
-            .append(")");
-            params.add(pattern);
-            params.add(pattern);
+            sql.append(" AND UPPER(p.name) LIKE ?");
+            params.add(toLikePattern(productName));
         }
         if (!isNullOrEmpty(categoryName)) {
             sql.append(" AND UPPER(c.name) LIKE ?");
@@ -124,13 +119,8 @@ public class ProductResource {
         List<Object> params = new ArrayList<>();
 
         if (!isNullOrEmpty(productName)) {
-            String pattern = toLikePattern(productName);
-            sql.append(" AND (")
-            .append("  UPPER(p.name) LIKE ?")
-            .append("  OR UPPER(CAST(p.description AS VARCHAR(32672))) LIKE ?")
-            .append(")");
-            params.add(pattern);
-            params.add(pattern);
+            sql.append(" AND UPPER(p.name) LIKE ?");
+            params.add(toLikePattern(productName));
         }
         if (!isNullOrEmpty(categoryName)) {
             sql.append(" AND UPPER(c.name) LIKE ?");
