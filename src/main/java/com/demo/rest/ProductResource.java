@@ -190,7 +190,7 @@ public class ProductResource {
     }
 
     private static String toLikePattern(String keyword) {
-        return "%" + keyword.toUpperCase() + "%";  // 呼び出し側で null/empty チェック済み
+        return keyword.toUpperCase() + "%";  // 呼び出し側で null/empty チェック済み
     }
 
     /** PreparedStatement にリストの値を順番にバインド */
