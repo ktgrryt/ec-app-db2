@@ -69,33 +69,41 @@ public class ProductResource {
            .append("       b.name AS brand_name ")
            .append("FROM   products p ")
            .append("LEFT JOIN categories c ON c.id = p.category_id ")
-           .append("LEFT JOIN brands     b ON b.id = p.brand_id ")
-           .append("WHERE 1=1");
-
+           .append("LEFT JOIN brands     b ON b.id = p.brand_id ");
+        
         List<Object> params = new ArrayList<>();
-
+        
+        boolean first = true;
+        
         if (!isNullOrEmpty(productName)) {
-            sql.append(" AND UPPER(p.name) LIKE ?");
+            sql.append(first ? " WHERE " : " AND ");
+            sql.append("UPPER(p.name) LIKE ?");
             params.add(toLikePattern(productName));
+            first = false;
         }
         if (!isNullOrEmpty(categoryName)) {
-            sql.append(" AND UPPER(c.name) LIKE ?");
+            sql.append(first ? " WHERE " : " AND ");
+            sql.append("UPPER(c.name) LIKE ?");
             params.add(toLikePattern(categoryName));
+            first = false;
         }
         if (!isNullOrEmpty(brandName)) {
-            sql.append(" AND UPPER(b.name) LIKE ?");
+            sql.append(first ? " WHERE " : " AND ");
+            sql.append("UPPER(b.name) LIKE ?");
             params.add(toLikePattern(brandName));
+            first = false;
         }
-
+        
         sql.append(" ORDER BY p.id OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
         params.add(offset);
         params.add(pageSize);
-
+        
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = prepare(conn, sql.toString(), params);
              ResultSet rs = ps.executeQuery()) {
             return mapProducts(rs);
         }
+
     }
 
     /* --------------------------------------------------
